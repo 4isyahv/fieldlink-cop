@@ -317,9 +317,11 @@ function serveStatic(response, url) {
       if (error.code === 'ENOENT') return sendJson(response, 404, { error: 'Not found' });
       return sendJson(response, 500, { error: 'Unable to read file' });
     }
+    const extension = path.extname(filePath);
+    const shouldRevalidate = ['.html', '.css', '.js'].includes(extension);
     response.writeHead(200, {
-      'Content-Type': mimeTypes[path.extname(filePath)] || 'application/octet-stream',
-      'Cache-Control': filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=300',
+      'Content-Type': mimeTypes[extension] || 'application/octet-stream',
+      'Cache-Control': shouldRevalidate ? 'no-cache' : 'public, max-age=300',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin'
     });
