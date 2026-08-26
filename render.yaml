@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fieldlink-cop
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    envVars:
+      - key: ACCESS_CODE
+        generateValue: true
+      - key: DATA_FILE
+        value: /var/data/cop-state.json
+    disk:
+      name: cop-data
+      mountPath: /var/data
+      sizeGB: 1

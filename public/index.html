@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#131815">
+  <title>FieldLink COP</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span></div>
+        <div>
+          <div class="brand-name">FIELDLINK</div>
+          <div class="brand-sub">COMMON OPERATING PICTURE</div>
+        </div>
+      </div>
+
+      <button class="operation-chip" id="operation-chip" type="button" title="Current operation">
+        <span class="operation-pulse"></span>
+        <span><strong id="operation-name">OP MERIDIAN</strong><small id="operation-subtitle">Regional Flood Response</small></span>
+        <i data-lucide="chevron-down"></i>
+      </button>
+
+      <div class="top-actions">
+        <div class="connection-chip" id="connection-chip" title="Live synchronization status">
+          <span class="connection-dot"></span>
+          <span id="connection-label">CONNECTING</span>
+        </div>
+        <div class="mission-time" title="Local time">
+          <span id="mission-clock">--:--:--</span>
+          <small>MYT</small>
+        </div>
+        <button class="icon-button" id="share-button" type="button" title="Copy shared workspace link" aria-label="Copy shared workspace link"><i data-lucide="share-2"></i></button>
+        <button class="operator-button" id="operator-button" type="button" title="Change operator identity">
+          <span class="operator-avatar" id="operator-avatar">OP</span>
+          <span class="operator-copy"><small>OPERATOR</small><strong id="operator-name">OPS</strong></span>
+        </button>
+      </div>
+    </header>
+
+    <nav class="tool-rail" aria-label="Map tools">
+      <div class="tool-group">
+        <button class="tool-button active" type="button" data-tool="cursor" title="Select map items" aria-label="Select map items"><i data-lucide="mouse-pointer-2"></i></button>
+        <button class="tool-button" type="button" data-tool="incident" title="Place incident" aria-label="Place incident"><i data-lucide="triangle-alert"></i></button>
+        <button class="tool-button" type="button" data-tool="unit" title="Place unit" aria-label="Place unit"><i data-lucide="shield-plus"></i></button>
+        <button class="tool-button" type="button" data-tool="measure" title="Measure distance" aria-label="Measure distance"><i data-lucide="ruler"></i></button>
+      </div>
+      <div class="tool-group tool-group-bottom">
+        <button class="tool-button" id="layers-button" type="button" title="Map layers" aria-label="Map layers"><i data-lucide="layers-3"></i></button>
+        <button class="tool-button" id="recenter-button" type="button" title="Recenter map" aria-label="Recenter map"><i data-lucide="scan"></i></button>
+        <button class="tool-button" id="intel-toggle" type="button" title="Operations panel" aria-label="Toggle operations panel"><i data-lucide="panel-right"></i></button>
+      </div>
+    </nav>
+
+    <main class="map-workspace">
+      <div id="map" role="application" aria-label="Shared operational map"></div>
+      <div class="map-unavailable" id="map-unavailable" hidden>
+        <i data-lucide="map"></i>
+        <strong>Map service unavailable</strong>
+        <span>Live reports remain available in the operations panel.</span>
+      </div>
+
+      <div class="map-search">
+        <i data-lucide="search"></i>
+        <input id="map-search-input" type="search" placeholder="Find unit, incident, or location" aria-label="Find map item">
+        <kbd>/</kbd>
+      </div>
+
+      <div class="map-meta">
+        <div><span>GRID</span><strong id="grid-coordinate">03.1390 N · 101.6869 E</strong></div>
+        <div><span>LAST SYNC</span><strong id="last-sync">WAITING</strong></div>
+      </div>
+
+      <section class="layer-panel" id="layer-panel" aria-label="Map layers" hidden>
+        <div class="panel-heading"><span>MAP LAYERS</span><button class="icon-button small" id="layers-close" type="button" aria-label="Close layers"><i data-lucide="x"></i></button></div>
+        <label><span class="legend-mark unit-legend"></span><span>Friendly units</span><input type="checkbox" data-layer="units" checked></label>
+        <label><span class="legend-mark incident-legend"></span><span>Incidents</span><input type="checkbox" data-layer="incidents" checked></label>
+        <label><span class="legend-mark hazard-legend"></span><span>Risk zones</span><input type="checkbox" data-layer="zones" checked></label>
+        <label><span class="legend-line"></span><span>Active routes</span><input type="checkbox" data-layer="routes" checked></label>
+      </section>
+
+      <section class="measure-panel" id="measure-panel" hidden>
+        <span>MEASUREMENT</span>
+        <strong id="measure-value">Select a start point</strong>
+        <button class="text-button" id="measure-clear" type="button">CLEAR</button>
+      </section>
+
+      <section class="selection-card" id="selection-card" hidden>
+        <div class="selection-accent"></div>
+        <button class="icon-button small selection-close" id="selection-close" type="button" aria-label="Close details"><i data-lucide="x"></i></button>
+        <span class="selection-kicker" id="selection-kicker">INCIDENT</span>
+        <strong id="selection-title">Bridge access blocked</strong>
+        <p id="selection-detail">Debris and rising water.</p>
+        <div class="selection-footer">
+          <span id="selection-meta">Reported 12 min ago</span>
+          <button class="status-button" id="selection-action" type="button">ASSIGN</button>
+        </div>
+      </section>
+
+      <div class="map-attribution">LIVE COP · OSM MAP DATA</div>
+    </main>
+
+    <aside class="intel-panel" id="intel-panel">
+      <div class="intel-header">
+        <div>
+          <span class="section-label">OPERATION STATUS</span>
+          <h1>Live overview</h1>
+        </div>
+        <div class="live-count"><span></span><strong id="online-count">1</strong> ONLINE</div>
+      </div>
+
+      <div class="metric-strip">
+        <div><span>OPEN</span><strong id="metric-open">0</strong><small>INCIDENTS</small></div>
+        <div><span>FIELD</span><strong id="metric-units">0</strong><small>UNITS</small></div>
+        <div><span>HIGH</span><strong id="metric-high">0</strong><small>PRIORITY</small></div>
+      </div>
+
+      <div class="intel-tabs" role="tablist">
+        <button class="intel-tab active" type="button" data-tab="feed" role="tab">ACTIVITY <span id="feed-badge">0</span></button>
+        <button class="intel-tab" type="button" data-tab="units" role="tab">UNITS</button>
+        <button class="intel-tab" type="button" data-tab="chat" role="tab">COMMS</button>
+      </div>
+
+      <div class="intel-content">
+        <section class="tab-view active" id="tab-feed" role="tabpanel">
+          <div class="priority-list" id="priority-list"></div>
+          <div class="feed-divider"><span>RECENT ACTIVITY</span></div>
+          <div class="activity-feed" id="activity-feed"></div>
+        </section>
+        <section class="tab-view" id="tab-units" role="tabpanel">
+          <div class="unit-list" id="unit-list"></div>
+        </section>
+        <section class="tab-view chat-view" id="tab-chat" role="tabpanel">
+          <div class="message-list" id="message-list"></div>
+          <form class="message-form" id="message-form">
+            <input id="message-input" type="text" maxlength="240" placeholder="Send operational update" aria-label="Operational update">
+            <button type="submit" class="icon-button send-button" title="Send update" aria-label="Send update"><i data-lucide="send"></i></button>
+          </form>
+        </section>
+      </div>
+
+      <button class="primary-report-button" id="quick-report" type="button"><i data-lucide="triangle-alert"></i><span>NEW INCIDENT REPORT</span><kbd>R</kbd></button>
+    </aside>
+  </div>
+
+  <dialog class="entry-dialog" id="incident-dialog">
+    <form method="dialog" id="incident-form">
+      <div class="dialog-header">
+        <div><span class="section-label">SHARED MAP UPDATE</span><h2>New incident report</h2></div>
+        <button class="icon-button" type="button" data-dialog-close aria-label="Close incident form"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialog-body">
+        <label class="field field-wide"><span>REPORT TITLE</span><input name="title" required maxlength="80" placeholder="What is happening?"></label>
+        <div class="field-row">
+          <label class="field"><span>PRIORITY</span><select name="severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option></select></label>
+          <label class="field"><span>CATEGORY</span><select name="category"><option>Hazard</option><option>Medical</option><option>Infrastructure</option><option>Security</option><option>Logistics</option><option>Other</option></select></label>
+        </div>
+        <label class="field field-wide"><span>DETAILS</span><textarea name="details" maxlength="300" rows="4" placeholder="Add conditions, access notes, or resources required"></textarea></label>
+        <div class="coordinate-fields">
+          <label class="field"><span>LATITUDE</span><input name="lat" type="number" step="any" required></label>
+          <label class="field"><span>LONGITUDE</span><input name="lng" type="number" step="any" required></label>
+          <button class="icon-button coordinate-pick" id="incident-pick" type="button" title="Pick location on map" aria-label="Pick incident location on map"><i data-lucide="map-pin"></i></button>
+        </div>
+      </div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-close>CANCEL</button><button class="danger-button" type="submit"><i data-lucide="radio"></i>TRANSMIT REPORT</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="entry-dialog" id="unit-dialog">
+    <form method="dialog" id="unit-form">
+      <div class="dialog-header">
+        <div><span class="section-label">FORCE TRACKING</span><h2>Add field unit</h2></div>
+        <button class="icon-button" type="button" data-dialog-close aria-label="Close unit form"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dialog-body">
+        <div class="field-row">
+          <label class="field"><span>CALLSIGN</span><input name="callsign" required maxlength="24" placeholder="ECHO 4"></label>
+          <label class="field"><span>TEAM TYPE</span><select name="team"><option>Rescue</option><option>Medical</option><option>Security</option><option>Logistics</option><option>Command</option></select></label>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>STATUS</span><select name="status"><option>AVAILABLE</option><option>MOVING</option><option>ON SCENE</option><option>HOLDING</option></select></label>
+          <label class="field"><span>PERSONNEL</span><input name="members" type="number" min="1" max="99" value="1"></label>
+        </div>
+        <div class="coordinate-fields">
+          <label class="field"><span>LATITUDE</span><input name="lat" type="number" step="any" required></label>
+          <label class="field"><span>LONGITUDE</span><input name="lng" type="number" step="any" required></label>
+          <button class="icon-button coordinate-pick" id="unit-pick" type="button" title="Pick location on map" aria-label="Pick unit location on map"><i data-lucide="map-pin"></i></button>
+        </div>
+      </div>
+      <div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-close>CANCEL</button><button class="primary-button" type="submit"><i data-lucide="shield-plus"></i>ADD UNIT</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="access-dialog" id="access-dialog">
+    <form id="access-form">
+      <div class="access-brand"><div class="brand-mark large"><span></span></div><strong>FIELDLINK</strong><span>SECURE OPERATIONS WORKSPACE</span></div>
+      <h2>Join operating picture</h2>
+      <p>Enter your operator identity to appear in updates. A deployment access code may also be required.</p>
+      <label class="field"><span>OPERATOR / CALLSIGN</span><input id="access-operator" name="operator" required maxlength="28" autocomplete="nickname" placeholder="e.g. OPS LEAD"></label>
+      <label class="field" id="code-field"><span>ACCESS CODE</span><input id="access-code" name="code" type="password" autocomplete="current-password" placeholder="Deployment access code"></label>
+      <div class="access-error" id="access-error" role="alert"></div>
+      <button class="primary-button access-submit" type="submit"><i data-lucide="log-in"></i>ENTER WORKSPACE</button>
+      <small>Use only for authorized operational coordination.</small>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><i data-lucide="check-circle-2"></i><span>Update synchronized</span></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

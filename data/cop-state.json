@@ -1,0 +1,245 @@
+{
+  "operation": {
+    "name": "OP MERIDIAN",
+    "subtitle": "Regional Flood Response",
+    "center": [
+      3.139,
+      101.6869
+    ],
+    "zoom": 13,
+    "updatedAt": "2026-08-26T08:16:15.305Z"
+  },
+  "units": [
+    {
+      "id": "unit-alpha",
+      "callsign": "ALPHA 1",
+      "team": "Rescue",
+      "status": "MOVING",
+      "members": 6,
+      "lat": 3.1558,
+      "lng": 101.6998,
+      "heading": 205,
+      "updatedAt": "2026-08-26T08:41:00.000Z",
+      "updatedBy": "OPS"
+    },
+    {
+      "id": "unit-bravo",
+      "callsign": "BRAVO 2",
+      "team": "Medical",
+      "status": "ON SCENE",
+      "members": 4,
+      "lat": 3.1312,
+      "lng": 101.6746,
+      "heading": 45,
+      "updatedAt": "2026-08-26T08:39:00.000Z",
+      "updatedBy": "MED"
+    },
+    {
+      "id": "unit-charlie",
+      "callsign": "CHARLIE 3",
+      "team": "Logistics",
+      "status": "HOLDING",
+      "members": 3,
+      "lat": 3.1468,
+      "lng": 101.6603,
+      "heading": 90,
+      "updatedAt": "2026-08-26T08:36:00.000Z",
+      "updatedBy": "LOG"
+    }
+  ],
+  "incidents": [
+    {
+      "id": "44e6a549-49ae-4435-8ac7-ed1317f91375",
+      "title": "AISYAH",
+      "category": "Hazard",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "lat": 3.068953,
+      "lng": 101.68087,
+      "details": "-HAZE 90%",
+      "reportedBy": "OPS",
+      "createdAt": "2026-08-26T08:16:15.304Z",
+      "updatedAt": "2026-08-26T08:16:15.304Z"
+    },
+    {
+      "id": "a6699203-7906-44e1-90be-d29b5e1fe7d1",
+      "title": "AISYAH",
+      "category": "Hazard",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "lat": 3.068953,
+      "lng": 101.68087,
+      "details": "-HAZE 90%",
+      "reportedBy": "OPS",
+      "createdAt": "2026-08-26T08:16:09.291Z",
+      "updatedAt": "2026-08-26T08:16:09.291Z"
+    },
+    {
+      "id": "inc-bridge",
+      "title": "Bridge access blocked",
+      "category": "Infrastructure",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "lat": 3.1495,
+      "lng": 101.6909,
+      "details": "Debris and rising water. Use northern approach.",
+      "reportedBy": "ALPHA 1",
+      "createdAt": "2026-08-26T08:22:00.000Z",
+      "updatedAt": "2026-08-26T08:22:00.000Z"
+    },
+    {
+      "id": "inc-medical",
+      "title": "Medical assistance requested",
+      "category": "Medical",
+      "severity": "HIGH",
+      "status": "ASSIGNED",
+      "lat": 3.1274,
+      "lng": 101.6842,
+      "details": "Two civilians awaiting transport.",
+      "reportedBy": "BRAVO 2",
+      "createdAt": "2026-08-26T08:31:00.000Z",
+      "updatedAt": "2026-08-26T08:37:00.000Z"
+    },
+    {
+      "id": "inc-road",
+      "title": "Road partially flooded",
+      "category": "Hazard",
+      "severity": "MEDIUM",
+      "status": "MONITORING",
+      "lat": 3.1412,
+      "lng": 101.7118,
+      "details": "Passable to high-clearance vehicles only.",
+      "reportedBy": "OPS",
+      "createdAt": "2026-08-26T08:13:00.000Z",
+      "updatedAt": "2026-08-26T08:13:00.000Z"
+    }
+  ],
+  "zones": [
+    {
+      "id": "zone-flood",
+      "name": "Flood risk zone",
+      "type": "HAZARD",
+      "coordinates": [
+        [
+          3.1512,
+          101.6812
+        ],
+        [
+          3.1587,
+          101.6935
+        ],
+        [
+          3.1502,
+          101.7043
+        ],
+        [
+          3.1403,
+          101.6978
+        ],
+        [
+          3.1415,
+          101.6853
+        ]
+      ]
+    },
+    {
+      "id": "zone-staging",
+      "name": "Staging area",
+      "type": "FRIENDLY",
+      "coordinates": [
+        [
+          3.1289,
+          101.6652
+        ],
+        [
+          3.1346,
+          101.6652
+        ],
+        [
+          3.1346,
+          101.6725
+        ],
+        [
+          3.1289,
+          101.6725
+        ]
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "route-supply",
+      "name": "Supply route GREEN",
+      "status": "OPEN",
+      "coordinates": [
+        [
+          3.1211,
+          101.6561
+        ],
+        [
+          3.1289,
+          101.6687
+        ],
+        [
+          3.1392,
+          101.6764
+        ],
+        [
+          3.151,
+          101.6798
+        ]
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg-1",
+      "author": "OPS",
+      "text": "Northern staging area is active.",
+      "createdAt": "2026-08-26T08:35:00.000Z"
+    },
+    {
+      "id": "msg-2",
+      "author": "ALPHA 1",
+      "text": "Approaching bridge from the east.",
+      "createdAt": "2026-08-26T08:40:00.000Z"
+    }
+  ],
+  "activity": [
+    {
+      "id": "9ad4657a-800c-47f4-b9d5-d5be99ef3252",
+      "kind": "incident",
+      "actor": "OPS",
+      "text": "Reported: AISYAH",
+      "createdAt": "2026-08-26T08:16:15.305Z"
+    },
+    {
+      "id": "79eb934d-606c-40e4-b48e-5f6ca2b24e78",
+      "kind": "incident",
+      "actor": "OPS",
+      "text": "Reported: AISYAH",
+      "createdAt": "2026-08-26T08:16:09.323Z"
+    },
+    {
+      "id": "act-1",
+      "kind": "incident",
+      "actor": "BRAVO 2",
+      "text": "Medical request assigned",
+      "createdAt": "2026-08-26T08:37:00.000Z"
+    },
+    {
+      "id": "act-2",
+      "kind": "unit",
+      "actor": "ALPHA 1",
+      "text": "Position updated",
+      "createdAt": "2026-08-26T08:41:00.000Z"
+    },
+    {
+      "id": "act-3",
+      "kind": "system",
+      "actor": "OPS",
+      "text": "Operating picture synchronized",
+      "createdAt": "2026-08-26T08:42:00.000Z"
+    }
+  ]
+}
