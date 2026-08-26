@@ -544,10 +544,11 @@ function bindInterface() {
 
   $('#incident-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
     try {
       await api('/api/incidents', { method: 'POST', body: JSON.stringify({ ...values, reportedBy: app.operator }) });
-      event.currentTarget.reset();
+      form.reset();
       $('#incident-dialog').close();
       await syncState();
       showToast('Incident report synchronized');
@@ -556,10 +557,11 @@ function bindInterface() {
 
   $('#unit-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
     try {
       await api('/api/units', { method: 'POST', body: JSON.stringify({ ...values, updatedBy: app.operator }) });
-      event.currentTarget.reset();
+      form.reset();
       $('#unit-dialog').close();
       await syncState();
       showToast('Unit added to the shared picture');
