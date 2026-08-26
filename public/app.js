@@ -10,6 +10,7 @@ const app = {
   activeTool: 'cursor',
   measurePoints: [],
   pendingPick: null,
+  resumeDialog: null,
   operator: localStorage.getItem('cop.operator') || '',
   accessCode: sessionStorage.getItem('cop.accessCode') || '',
   liveGeneration: 0,
@@ -74,6 +75,7 @@ function setOperator(name) {
   app.operator = String(name || 'OPERATOR').trim().slice(0, 28).toUpperCase();
   localStorage.setItem('cop.operator', app.operator);
   $('#operator-name').textContent = app.operator;
+  if ($('#incident-reporter')) $('#incident-reporter').textContent = app.operator;
   const initials = app.operator.split(/\s+/).map((part) => part[0]).join('').slice(0, 2);
   $('#operator-avatar').textContent = initials || 'OP';
 }
@@ -86,7 +88,7 @@ function openAccessDialog(message = '') {
   $('#code-field').hidden = !app.config?.accessRequired;
   $('#access-code').required = Boolean(app.config?.accessRequired);
   if (!dialog.open) dialog.showModal();
-  setTimeout(() => (app.operator ? $('#access-code') : $('#access-operator')).focus(), 50);
+  setTimeout(() => (app.operator && app.config?.accessRequired ? $('#access-code') : $('#access-operator')).focus(), 50);
 }
 
 function requireAccessCode(message = 'Enter the current deployment access code.') {
@@ -112,6 +114,11 @@ async function joinWorkspace() {
     renderAll();
     connectLive();
     setConnection(true);
+    if (app.resumeDialog) {
+      const dialog = $(`#${app.resumeDialog}-dialog`);
+      app.resumeDialog = null;
+      if (dialog && !dialog.open) dialog.showModal();
+    }
   } catch (error) {
     if (error.status === 401) requireAccessCode('The access code was not accepted. Try again.');
     else openAccessDialog('Unable to reach the workspace.');
@@ -323,7 +330,11 @@ function renderSelection() {
   $('#selection-kicker').style.color = isIncident ? severityColor(item.severity) : '#64c6cf';
   $('#selection-title').textContent = isIncident ? item.title : item.callsign;
   $('#selection-detail').textContent = isIncident ? (item.details || 'No additional details.') : `${item.members} personnel · Updated by ${item.updatedBy}`;
-  $('#selection-meta').textContent = isIncident ? `Reported by ${item.reportedBy} · ${formatAgo(item.createdAt)}` : `Position updated ${formatAgo(item.updatedAt)}`;
+  const hasLocationAccuracy = item.accuracy !== null && item.accuracy !== undefined && Number.isFinite(Number(item.accuracy));
+  const locationAccuracy = hasLocationAccuracy ? ` · GPS ±${Math.round(item.accuracy)}m` : '';
+  $('#selection-meta').textContent = isIncident
+    ? `Reported by ${item.reportedBy}${locationAccuracy} · ${formatAgo(item.createdAt)}`
+    : `Updated by ${item.updatedBy}${locationAccuracy} · ${formatAgo(item.updatedAt)}`;
   const action = $('#selection-action');
   action.hidden = !isIncident || item.status === 'RESOLVED';
   action.textContent = { OPEN: 'ASSIGN', ASSIGNED: 'MONITOR', MONITORING: 'RESOLVE' }[item.status] || 'UPDATE';
@@ -363,10 +374,13 @@ function setTool(tool) {
 
 function handleMapClick({ latlng }) {
   if (app.pendingPick) {
-    const dialog = $(`#${app.pendingPick}-dialog`);
-    const form = $(`#${app.pendingPick}-form`);
+    const type = app.pendingPick;
+    const dialog = $(`#${type}-dialog`);
+    const form = $(`#${type}-form`);
     form.elements.lat.value = latlng.lat.toFixed(6);
     form.elements.lng.value = latlng.lng.toFixed(6);
+    form.elements.accuracy.value = '';
+    setLocationStatus(type, 'MAP POINT SELECTED', 'good');
     app.pendingPick = null;
     dialog.showModal();
     return;
@@ -382,9 +396,16 @@ function handleMapClick({ latlng }) {
 function openEntryDialog(type, coordinates) {
   const dialog = $(`#${type}-dialog`);
   const form = $(`#${type}-form`);
-  const point = coordinates || app.map?.getCenter() || { lat: app.state.operation.center[0], lng: app.state.operation.center[1] };
-  form.elements.lat.value = Number(point.lat).toFixed(6);
-  form.elements.lng.value = Number(point.lng).toFixed(6);
+  if (coordinates) {
+    form.elements.lat.value = Number(coordinates.lat).toFixed(6);
+    form.elements.lng.value = Number(coordinates.lng).toFixed(6);
+    setLocationStatus(type, 'MAP POINT SELECTED', 'good');
+  } else {
+    form.elements.lat.value = '';
+    form.elements.lng.value = '';
+    setLocationStatus(type, 'LOCATION REQUIRED');
+  }
+  form.elements.accuracy.value = '';
   if (!dialog.open) dialog.showModal();
   setTimeout(() => form.elements[type === 'incident' ? 'title' : 'callsign'].focus(), 40);
 }
@@ -392,7 +413,60 @@ function openEntryDialog(type, coordinates) {
 function beginCoordinatePick(type) {
   $(`#${type}-dialog`).close();
   app.pendingPick = type;
+  setLocationStatus(type, 'SELECT ON MAP', 'warning');
   showToast(`Select the ${type} position on the map`);
+}
+
+function setLocationStatus(type, message, state = '') {
+  const status = $(`#${type}-location-status`);
+  if (!status) return;
+  status.textContent = message;
+  if (state) status.dataset.state = state;
+  else delete status.dataset.state;
+}
+
+function markManualCoordinates(type) {
+  const form = $(`#${type}-form`);
+  form.elements.accuracy.value = '';
+  const complete = form.elements.lat.value && form.elements.lng.value;
+  setLocationStatus(type, complete ? 'MANUAL COORDINATES' : 'LOCATION REQUIRED', complete ? 'warning' : '');
+}
+
+function locateDevice(type) {
+  const button = $(`#${type}-gps`);
+  if (!navigator.geolocation) {
+    setLocationStatus(type, 'GPS NOT SUPPORTED');
+    showToast('This device does not provide browser location. Pick the point on the map.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  setLocationStatus(type, 'LOCATING...', 'warning');
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const form = $(`#${type}-form`);
+      const { latitude, longitude, accuracy } = position.coords;
+      form.elements.lat.value = latitude.toFixed(6);
+      form.elements.lng.value = longitude.toFixed(6);
+      form.elements.accuracy.value = Math.round(accuracy);
+      const roundedAccuracy = Math.max(1, Math.round(accuracy));
+      setLocationStatus(type, `GPS ±${roundedAccuracy} M`, roundedAccuracy <= 50 ? 'good' : 'warning');
+      button.disabled = false;
+      if (app.map) app.map.flyTo([latitude, longitude], Math.max(app.map.getZoom(), 16), { duration: 0.55 });
+      showToast(`Device position acquired · accuracy ±${roundedAccuracy} m`);
+    },
+    (error) => {
+      const messages = {
+        1: 'Location permission was denied. Allow location access or pick a point on the map.',
+        2: 'Your device could not determine its location. Try again or pick a point on the map.',
+        3: 'The GPS request timed out. Try again or pick a point on the map.'
+      };
+      button.disabled = false;
+      setLocationStatus(type, 'GPS UNAVAILABLE');
+      showToast(messages[error.code] || 'Unable to read device location.', 'error');
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
 }
 
 function addMeasurePoint(latlng) {
@@ -541,6 +615,19 @@ function bindInterface() {
   $$('[data-dialog-close]').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
   $('#incident-pick').addEventListener('click', () => beginCoordinatePick('incident'));
   $('#unit-pick').addEventListener('click', () => beginCoordinatePick('unit'));
+  $('#incident-gps').addEventListener('click', () => locateDevice('incident'));
+  $('#unit-gps').addEventListener('click', () => locateDevice('unit'));
+  $('#incident-reporter-change').addEventListener('click', () => {
+    app.resumeDialog = 'incident';
+    $('#incident-dialog').close();
+    openAccessDialog();
+  });
+  for (const type of ['incident', 'unit']) {
+    const form = $(`#${type}-form`);
+    for (const name of ['lat', 'lng']) {
+      form.elements[name].addEventListener('input', () => markManualCoordinates(type));
+    }
+  }
 
   $('#incident-form').addEventListener('submit', async (event) => {
     event.preventDefault();

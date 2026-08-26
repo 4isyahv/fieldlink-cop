@@ -135,6 +135,12 @@ function requireCoordinates(body) {
   return { lat, lng };
 }
 
+function cleanAccuracy(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const accuracy = Number(value);
+  return Number.isFinite(accuracy) && accuracy >= 0 ? Math.min(100000, Math.round(accuracy)) : null;
+}
+
 function addActivity(kind, actor, text) {
   state.activity.unshift({
     id: crypto.randomUUID(),
@@ -210,6 +216,7 @@ async function handleApi(request, response, url) {
       status: 'OPEN',
       lat,
       lng,
+      accuracy: cleanAccuracy(body.accuracy),
       details: cleanText(body.details, 300),
       reportedBy: cleanText(body.reportedBy || 'OPERATOR', 28),
       createdAt: now,
@@ -249,6 +256,7 @@ async function handleApi(request, response, url) {
       members: Math.max(1, Math.min(99, Number(body.members) || 1)),
       lat,
       lng,
+      accuracy: cleanAccuracy(body.accuracy),
       heading: 0,
       updatedAt: now,
       updatedBy: cleanText(body.updatedBy || callsign, 28)

@@ -50,7 +50,8 @@ Map tiles and interface icons are loaded from public CDNs. Operators therefore n
 
 - Updates use a single long-lived HTTPS connection and appear on other connected devices immediately.
 - Reports, status changes, unit positions, chat, and activity history are persisted on the server.
-- An operator identity is stored in that browser. The access code is kept only for the current browser session.
+- An operator identity is stored in that browser and attached to each update. It is a self-declared display name, not a verified user account. The access code is kept only for the current browser session.
+- **Use Device GPS** requests high-accuracy browser location. Coordinates and the reported accuracy are sent to the COP only when the operator transmits the report or adds the unit.
 - This is an operational coordination starter, not a system approved for classified, life-critical, or regulated data. A production deployment should add named user accounts, role-based permissions, backups, monitoring, an audit export, and an organization-approved hosting environment.
 
 ## API health check
