@@ -64,6 +64,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(payload.error || `Request failed (${response.status})`);
     error.status = response.status;
+    if (response.status === 401) requireAccessCode();
     throw error;
   }
   return payload;
@@ -88,6 +89,21 @@ function openAccessDialog(message = '') {
   setTimeout(() => (app.operator ? $('#access-code') : $('#access-operator')).focus(), 50);
 }
 
+function requireAccessCode(message = 'Enter the current deployment access code.') {
+  app.config = { ...(app.config || {}), accessRequired: true };
+  app.accessCode = '';
+  sessionStorage.removeItem('cop.accessCode');
+  for (const id of ['incident-dialog', 'unit-dialog']) {
+    const dialog = $(`#${id}`);
+    if (dialog?.open) dialog.close();
+  }
+  openAccessDialog(message);
+}
+
+function showRequestError(error) {
+  if (error.status !== 401) showToast(error.message, 'error');
+}
+
 async function joinWorkspace() {
   try {
     app.state = await api('/api/state');
@@ -97,7 +113,8 @@ async function joinWorkspace() {
     connectLive();
     setConnection(true);
   } catch (error) {
-    openAccessDialog(error.status === 401 ? 'The access code was not accepted.' : 'Unable to reach the workspace.');
+    if (error.status === 401) requireAccessCode('The access code was not accepted. Try again.');
+    else openAccessDialog('Unable to reach the workspace.');
   }
 }
 
@@ -330,7 +347,7 @@ async function advanceIncident() {
     await syncState();
     showToast(`Incident moved to ${nextStatus}`);
   } catch (error) {
-    showToast(error.message, 'error');
+    showRequestError(error);
   }
 }
 
@@ -431,6 +448,10 @@ async function connectLive() {
   while (generation === app.liveGeneration) {
     try {
       const response = await fetch('/api/events', { headers: authHeaders() });
+      if (response.status === 401) {
+        requireAccessCode();
+        return;
+      }
       if (!response.ok || !response.body) throw new Error('Live connection unavailable');
       setConnection(true);
       const reader = response.body.getReader();
@@ -530,7 +551,7 @@ function bindInterface() {
       $('#incident-dialog').close();
       await syncState();
       showToast('Incident report synchronized');
-    } catch (error) { showToast(error.message, 'error'); }
+    } catch (error) { showRequestError(error); }
   });
 
   $('#unit-form').addEventListener('submit', async (event) => {
@@ -542,7 +563,7 @@ function bindInterface() {
       $('#unit-dialog').close();
       await syncState();
       showToast('Unit added to the shared picture');
-    } catch (error) { showToast(error.message, 'error'); }
+    } catch (error) { showRequestError(error); }
   });
 
   $('#message-form').addEventListener('submit', async (event) => {
@@ -554,7 +575,7 @@ function bindInterface() {
       await api('/api/messages', { method: 'POST', body: JSON.stringify({ text, author: app.operator }) });
       input.value = '';
       await syncState();
-    } catch (error) { showToast(error.message, 'error'); }
+    } catch (error) { showRequestError(error); }
   });
 
   $('#access-form').addEventListener('submit', async (event) => {
