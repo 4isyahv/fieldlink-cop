@@ -43,6 +43,8 @@ Put the container behind an HTTPS reverse proxy or use a host that terminates HT
 | `PORT` | `3000` | HTTP port exposed by the service |
 | `ACCESS_CODE` | empty | Shared workspace code; always set this on a public deployment |
 | `DATA_FILE` | `data/cop-state.json` | Persistent operating-picture file |
+| `GEOCODER_URL` | OpenStreetMap Nominatim | Replaceable location-search provider endpoint |
+| `GEOCODER_USER_AGENT` | FieldLink project URL | Application identifier sent to the search provider |
 
 Map tiles and interface icons are loaded from public CDNs. Operators therefore need normal internet access in addition to access to the deployed service.
 
@@ -50,6 +52,7 @@ Map tiles and interface icons are loaded from public CDNs. Operators therefore n
 
 - Updates use a single long-lived HTTPS connection and appear on other connected devices immediately.
 - Reports, status changes, unit positions, chat, and activity history are persisted on the server.
+- Location searches are submitted to the public OpenStreetMap Nominatim service only when the operator submits a search. Do not enter personal, confidential, or operationally sensitive information. The server caches repeated searches, biases ambiguous results toward the current map area, and globally throttles upstream requests.
 - An operator identity is stored in that browser and attached to each update. It is a self-declared display name, not a verified user account. The access code is kept only for the current browser session.
 - **Use Device GPS** requests high-accuracy browser location. Coordinates and the reported accuracy are sent to the COP only when the operator transmits the report or adds the unit.
 - This is an operational coordination starter, not a system approved for classified, life-critical, or regulated data. A production deployment should add named user accounts, role-based permissions, backups, monitoring, an audit export, and an organization-approved hosting environment.

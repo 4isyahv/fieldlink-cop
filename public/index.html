@@ -66,10 +66,15 @@
       </div>
 
       <div class="map-search">
-        <i data-lucide="search"></i>
-        <input id="map-search-input" type="search" placeholder="Find unit, incident, or location" aria-label="Find map item">
+        <button class="map-search-submit" id="map-search-button" type="button" aria-label="Search location" title="Search location"><i data-lucide="search"></i></button>
+        <input id="map-search-input" type="search" role="combobox" aria-autocomplete="list" aria-controls="location-results" aria-expanded="false" placeholder="Find place, address, unit, or incident" aria-label="Find map item">
         <kbd>/</kbd>
       </div>
+      <section class="search-results" id="search-results" aria-label="Location search results" hidden>
+        <div id="location-results"></div>
+        <div class="search-privacy">PUBLIC SEARCH · DO NOT ENTER SENSITIVE DATA</div>
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">SEARCH DATA © OPENSTREETMAP CONTRIBUTORS</a>
+      </section>
 
       <div class="map-meta">
         <div><span>GRID</span><strong id="grid-coordinate">03.1390 N · 101.6869 E</strong></div>
@@ -102,7 +107,7 @@
         </div>
       </section>
 
-      <div class="map-attribution">LIVE COP · OSM MAP DATA</div>
+      <div class="map-attribution">LIVE COP · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OPENSTREETMAP CONTRIBUTORS</a></div>
     </main>
 
     <aside class="intel-panel" id="intel-panel">

@@ -10,8 +10,16 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_FILE = path.resolve(process.env.DATA_FILE || path.join(ROOT, 'data', 'cop-state.json'));
 const PORT = Number(process.env.PORT || 3000);
 const ACCESS_CODE = String(process.env.ACCESS_CODE || '').trim();
+const GEOCODER_URL = String(process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org/search').trim();
+const GEOCODER_USER_AGENT = String(process.env.GEOCODER_USER_AGENT || 'FieldLink-COP/1.0 (+https://github.com/4isyahv/fieldlink-cop)').trim();
 const MAX_BODY_BYTES = 32 * 1024;
 const clients = new Set();
+const geocodeCache = new Map();
+const geocodeInFlight = new Map();
+const MAX_GEOCODE_QUEUE = 8;
+let geocodeQueue = Promise.resolve();
+let lastGeocodeRequestAt = 0;
+let geocodeQueueDepth = 0;
 
 const initialState = {
   operation: {
@@ -141,6 +149,106 @@ function cleanAccuracy(value) {
   return Number.isFinite(accuracy) && accuracy >= 0 ? Math.min(100000, Math.round(accuracy)) : null;
 }
 
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function normalizeViewbox(value) {
+  const coordinates = String(value || '').split(',').map(Number);
+  if (coordinates.length !== 4 || !coordinates.every(Number.isFinite)) return '';
+  const [west, north, east, south] = coordinates;
+  if (Math.abs(west) > 180 || Math.abs(east) > 180 || Math.abs(north) > 90 || Math.abs(south) > 90) return '';
+  if (west >= east || south >= north) return '';
+  return coordinates.map((coordinate) => coordinate.toFixed(6)).join(',');
+}
+
+function searchLocations(query, acceptLanguage = 'en', requestedViewbox = '') {
+  const normalizedQuery = query.replace(/\s+/g, ' ').trim();
+  const preferredLanguage = String(acceptLanguage || 'en').split(',')[0].split(';')[0];
+  const language = preferredLanguage.replace(/[^a-zA-Z0-9\-]/g, '').slice(0, 32) || 'en';
+  const viewbox = normalizeViewbox(requestedViewbox);
+  const cacheKey = `${normalizedQuery.toLocaleLowerCase('en')}|${language.toLocaleLowerCase('en')}|${viewbox}`;
+  const cached = geocodeCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.results);
+  if (cached) geocodeCache.delete(cacheKey);
+  if (geocodeInFlight.has(cacheKey)) return geocodeInFlight.get(cacheKey);
+  if (geocodeQueueDepth >= MAX_GEOCODE_QUEUE) {
+    return Promise.reject(Object.assign(new Error('Location search is busy. Try again shortly.'), { status: 429 }));
+  }
+  geocodeQueueDepth += 1;
+
+  const task = geocodeQueue.then(async () => {
+    const queuedCache = geocodeCache.get(cacheKey);
+    if (queuedCache && queuedCache.expiresAt > Date.now()) return queuedCache.results;
+
+    const throttleDelay = Math.max(0, 1100 - (Date.now() - lastGeocodeRequestAt));
+    if (throttleDelay) await delay(throttleDelay);
+    lastGeocodeRequestAt = Date.now();
+
+    const upstreamUrl = new URL(GEOCODER_URL);
+    upstreamUrl.searchParams.set('q', normalizedQuery);
+    upstreamUrl.searchParams.set('format', 'jsonv2');
+    upstreamUrl.searchParams.set('addressdetails', '1');
+    upstreamUrl.searchParams.set('limit', '5');
+    if (viewbox) {
+      upstreamUrl.searchParams.set('viewbox', viewbox);
+      upstreamUrl.searchParams.set('bounded', '0');
+    }
+
+    let upstream;
+    try {
+      upstream = await fetch(upstreamUrl, {
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': language,
+          'User-Agent': GEOCODER_USER_AGENT
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+    } catch {
+      throw Object.assign(new Error('Location search service is unavailable'), { status: 502 });
+    }
+    if (!upstream.ok) {
+      throw Object.assign(new Error('Location search service is unavailable'), { status: 502 });
+    }
+
+    let payload;
+    try {
+      payload = await upstream.json();
+    } catch {
+      throw Object.assign(new Error('Location search returned an invalid response'), { status: 502 });
+    }
+
+    const results = (Array.isArray(payload) ? payload : []).flatMap((item) => {
+      const lat = Number(item.lat);
+      const lng = Number(item.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return [];
+      const rawBounds = Array.isArray(item.boundingbox) ? item.boundingbox.map(Number) : [];
+      const bounds = rawBounds.length === 4 && rawBounds.every(Number.isFinite) ? rawBounds : null;
+      return [{
+        id: cleanText(item.place_id, 40) || crypto.randomUUID(),
+        label: cleanText(item.display_name, 260),
+        category: cleanText(item.category, 40),
+        type: cleanText(item.type, 40),
+        lat,
+        lng,
+        bounds
+      }];
+    }).filter((item) => item.label);
+
+    if (geocodeCache.size >= 200) geocodeCache.delete(geocodeCache.keys().next().value);
+    geocodeCache.set(cacheKey, { results, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+    return results;
+  }).finally(() => {
+    geocodeQueueDepth -= 1;
+    geocodeInFlight.delete(cacheKey);
+  });
+
+  geocodeInFlight.set(cacheKey, task);
+  geocodeQueue = task.catch(() => {});
+  return task;
+}
+
 function addActivity(kind, actor, text) {
   state.activity.unshift({
     id: crypto.randomUUID(),
@@ -199,6 +307,12 @@ async function handleApi(request, response, url) {
   }
   if (request.method === 'GET' && url.pathname === '/api/events') {
     return handleEvents(request, response);
+  }
+  if (request.method === 'GET' && url.pathname === '/api/geocode') {
+    const query = cleanText(url.searchParams.get('q'), 120);
+    if (query.length < 2) return sendJson(response, 400, { error: 'Enter at least two characters' });
+    const results = await searchLocations(query, request.headers['accept-language'], url.searchParams.get('viewbox'));
+    return sendJson(response, 200, { results });
   }
 
   const body = await readJson(request);

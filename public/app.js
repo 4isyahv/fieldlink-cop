@@ -11,6 +11,8 @@ const app = {
   measurePoints: [],
   pendingPick: null,
   resumeDialog: null,
+  locationResults: [],
+  searchGeneration: 0,
   operator: localStorage.getItem('cop.operator') || '',
   accessCode: sessionStorage.getItem('cop.accessCode') || '',
   liveGeneration: 0,
@@ -149,6 +151,7 @@ function initializeMap() {
     routes: L.layerGroup().addTo(app.map),
     units: L.layerGroup().addTo(app.map),
     incidents: L.layerGroup().addTo(app.map),
+    search: L.layerGroup().addTo(app.map),
     measure: L.layerGroup().addTo(app.map)
   };
 
@@ -165,7 +168,7 @@ function updateGridCoordinate({ lat, lng }) {
 function renderMap() {
   if (!app.map || !app.state) return;
   Object.values(app.layers).forEach((layer) => {
-    if (layer !== app.layers.measure) layer.clearLayers();
+    if (layer !== app.layers.measure && layer !== app.layers.search) layer.clearLayers();
   });
   app.markers.clear();
 
@@ -312,6 +315,133 @@ function focusItem(type, id) {
   if (window.innerWidth <= 820) $('#intel-panel').classList.remove('open');
 }
 
+function hideSearchResults() {
+  app.searchGeneration += 1;
+  $('#search-results').hidden = true;
+  $('#map-search-input').setAttribute('aria-expanded', 'false');
+}
+
+function renderSearchState(icon, message, loading = false) {
+  const panel = $('#search-results');
+  const results = $('#location-results');
+  panel.hidden = false;
+  $('#map-search-input').setAttribute('aria-expanded', 'true');
+  results.setAttribute('role', 'status');
+  results.setAttribute('aria-live', 'polite');
+  results.innerHTML = `<div class="search-state ${loading ? 'loading' : ''}"><i data-lucide="${icon}"></i><span>${escapeHtml(message)}</span></div>`;
+  refreshIcons();
+}
+
+function renderLocationResults(results) {
+  app.locationResults = results;
+  const panel = $('#search-results');
+  const container = $('#location-results');
+  panel.hidden = false;
+  $('#map-search-input').setAttribute('aria-expanded', 'true');
+  container.setAttribute('role', 'listbox');
+  container.removeAttribute('aria-live');
+  container.innerHTML = results.map((result, index) => {
+    const type = String(result.type || result.category || 'location').replaceAll('_', ' ');
+    return `<button class="search-result" type="button" role="option" data-location-index="${index}">
+      <span class="search-result-icon"><i data-lucide="map-pin"></i></span>
+      <span class="search-result-copy"><strong>${escapeHtml(result.label)}</strong><span>${escapeHtml(type)}</span></span>
+      <i data-lucide="chevron-right"></i>
+    </button>`;
+  }).join('');
+  $$('[data-location-index]').forEach((button) => button.addEventListener('click', () => {
+    focusLocation(app.locationResults[Number(button.dataset.locationIndex)]);
+  }));
+  refreshIcons();
+}
+
+function focusLocation(result) {
+  if (!result || !app.map) return;
+  const lat = Number(result.lat);
+  const lng = Number(result.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+  app.layers.search.clearLayers();
+  const marker = L.marker([lat, lng], {
+    zIndexOffset: 800,
+    icon: L.divIcon({
+      className: '',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      html: '<div class="search-location"><span></span></div>'
+    })
+  }).addTo(app.layers.search);
+  marker.bindTooltip(escapeHtml(result.label), { direction: 'top', offset: [0, -15] }).openTooltip();
+
+  const bounds = Array.isArray(result.bounds) ? result.bounds.map(Number) : [];
+  if (bounds.length === 4 && bounds.every(Number.isFinite)) {
+    app.map.fitBounds([[bounds[0], bounds[2]], [bounds[1], bounds[3]]], { padding: [35, 35], maxZoom: 17 });
+  } else {
+    app.map.flyTo([lat, lng], 16, { duration: 0.6 });
+  }
+  updateGridCoordinate({ lat, lng });
+  $('#map-search-input').value = result.label;
+  hideSearchResults();
+}
+
+function parseCoordinateSearch(query) {
+  const match = query.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+  if (!match) return null;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { label: `${lat.toFixed(6)}, ${lng.toFixed(6)}`, type: 'coordinates', lat, lng, bounds: null };
+}
+
+async function searchMap(rawQuery) {
+  const query = String(rawQuery || '').trim();
+  const generation = ++app.searchGeneration;
+  app.layers.search?.clearLayers();
+  if (query.length < 2 || !app.state) {
+    hideSearchResults();
+    return;
+  }
+
+  const coordinateResult = parseCoordinateSearch(query);
+  if (coordinateResult) {
+    focusLocation(coordinateResult);
+    return;
+  }
+
+  const normalized = query.toLocaleLowerCase('en');
+  const incident = app.state.incidents.find((item) => `${item.title} ${item.category}`.toLocaleLowerCase('en').includes(normalized));
+  const unit = app.state.units.find((item) => `${item.callsign} ${item.team}`.toLocaleLowerCase('en').includes(normalized));
+  if (incident) {
+    hideSearchResults();
+    focusItem('incident', incident.id);
+    return;
+  }
+  if (unit) {
+    hideSearchResults();
+    focusItem('unit', unit.id);
+    return;
+  }
+
+  renderSearchState('loader-circle', 'SEARCHING OPENSTREETMAP...', true);
+  try {
+    const parameters = new URLSearchParams({ q: query });
+    const mapBounds = app.map?.getBounds();
+    if (mapBounds) {
+      parameters.set('viewbox', [mapBounds.getWest(), mapBounds.getNorth(), mapBounds.getEast(), mapBounds.getSouth()].map((value) => value.toFixed(6)).join(','));
+    }
+    const payload = await api(`/api/geocode?${parameters}`);
+    if (generation !== app.searchGeneration) return;
+    if (!payload.results?.length) {
+      renderSearchState('map-pin-x', 'NO LOCATION FOUND');
+      return;
+    }
+    renderLocationResults(payload.results);
+  } catch (error) {
+    if (generation !== app.searchGeneration) return;
+    hideSearchResults();
+    if (error.status !== 401) showToast(error.message || 'Location search is unavailable', 'error');
+  }
+}
+
 function renderSelection() {
   const card = $('#selection-card');
   const isIncident = app.selected?.type === 'incident';
@@ -373,6 +503,7 @@ function setTool(tool) {
 }
 
 function handleMapClick({ latlng }) {
+  hideSearchResults();
   if (app.pendingPick) {
     const type = app.pendingPick;
     const dialog = $(`#${type}-dialog`);
@@ -678,14 +809,22 @@ function bindInterface() {
   });
 
   $('#map-search-input').addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideSearchResults();
+      event.currentTarget.blur();
+      return;
+    }
     if (event.key !== 'Enter') return;
-    const query = event.currentTarget.value.trim().toLowerCase();
-    if (!query || !app.state) return;
-    const incident = app.state.incidents.find((item) => `${item.title} ${item.category}`.toLowerCase().includes(query));
-    const unit = app.state.units.find((item) => `${item.callsign} ${item.team}`.toLowerCase().includes(query));
-    if (incident) focusItem('incident', incident.id);
-    else if (unit) focusItem('unit', unit.id);
-    else showToast('No matching map item found', 'error');
+    event.preventDefault();
+    searchMap(event.currentTarget.value);
+  });
+  $('#map-search-button').addEventListener('click', () => searchMap($('#map-search-input').value));
+  $('#map-search-input').addEventListener('input', () => {
+    hideSearchResults();
+    app.layers.search?.clearLayers();
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.map-search') && !event.target.closest('#search-results')) hideSearchResults();
   });
 
   document.addEventListener('keydown', (event) => {
@@ -695,6 +834,7 @@ function bindInterface() {
     if (event.key === 'Escape') {
       $('#intel-panel').classList.remove('open');
       $('#layer-panel').hidden = true;
+      hideSearchResults();
       setTool('cursor');
     }
   });
